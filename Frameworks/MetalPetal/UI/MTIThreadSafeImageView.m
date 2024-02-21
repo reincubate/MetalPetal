@@ -4,7 +4,7 @@
 //
 //  Created by Yu Ao on 2019/6/12.
 //
-#if __has_include(<UIKit/UIKit.h>)
+#if __has_include(<UIKit/UIKit.h>) && TARGET_OS_IOS
 
 #import <UIKit/UIKit.h>
 #import "MTIImage.h"
