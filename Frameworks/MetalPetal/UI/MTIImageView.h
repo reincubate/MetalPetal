@@ -5,7 +5,7 @@
 //  Created by Yu Ao on 09/10/2017.
 //
 
-#if __has_include(<UIKit/UIKit.h>) && TARGET_OS_IOS
+#if __has_include(<UIKit/UIKit.h>) && __is_target_os(iOS)
 
 #import <UIKit/UIKit.h>
 #import <MetalKit/MetalKit.h>
