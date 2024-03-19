@@ -32,7 +32,7 @@ extension MTIImageViewProtocol {
     }
 }
 
-#if canImport(UIKit)
+#if canImport(UIKit) && os(iOS)
 
 extension MTIImageView: MTIImageViewProtocol {
     

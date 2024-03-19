@@ -358,6 +358,9 @@ public class MTIVideoComposition {
     /// - If the specified asset is an instance of AVComposition, the renderSize will be set to the naturalSize of the AVComposition; otherwise the renderSize will be set to a value that encompasses all of the asset's video tracks.
     /// - A renderScale of 1.0.
     public init(asset inputAsset: AVAsset, context: MTIContext, queue: DispatchQueue?, filter: @escaping (MTIAsyncVideoCompositionRequestHandler.Request) throws -> MTIImage) {
+        #if os(visionOS)
+        fatalError("Unavailable on visionOS")
+        #else
         asset = inputAsset.copy() as! AVAsset
         videoComposition = AVMutableVideoComposition(propertiesOf: asset)
         let videoTracks = asset.tracks(withMediaType: .video)
@@ -378,5 +381,6 @@ public class MTIVideoComposition {
         videoComposition.customVideoCompositorClass = Compositor.self
         let handler = MTIAsyncVideoCompositionRequestHandler(context: context, tracks: videoTracks, on: queue, filter: filter)
         videoComposition.instructions = [Compositor.Instruction(handler: handler.handle(request:), timeRange: CMTimeRange(start: .zero, duration: CMTime(value: CMTimeValue.max, timescale: 48000)))]
+        #endif
     }
 }
