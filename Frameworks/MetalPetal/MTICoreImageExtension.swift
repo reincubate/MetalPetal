@@ -137,24 +137,37 @@ public struct MTICoreImageKernel {
     }
     
     /// Process a `MTIImage` using a `CIFilter`. The filter is copied. If there are multiple filters you'd like to apply, do not call this method multiple times, instead you should subclass `CIFilter` and combine the filters to one `CIFilter` (https://developer.apple.com/library/archive/documentation/GraphicsImaging/Conceptual/CoreImaging/ci_filer_recipes/ci_filter_recipes.html#//apple_ref/doc/uid/TP30001185-CH4-SW1). This gives `CoreImage` a chance to optimize the render graph thus improves performance.
-    public static func image(byProcessing inputImage: MTIImage,
+    public static func image(byProcessing inputImage: MTIImage?,
                              using filter: CIFilter,
                              colorSpace: CGColorSpace? = CGColorSpaceCreateDeviceRGB(),
                              outputDimensions: MTITextureDimensions,
                              outputPixelFormat: MTLPixelFormat = .unspecified,
                              outputAlphaType: MTIAlphaType = .nonPremultiplied) -> MTIImage {
         let copiedFilter = filter.copy() as! CIFilter
-        return image(byProcessing: [inputImage], using: { inputImages in
-            copiedFilter.setValue(inputImages[0], forKey: kCIInputImageKey)
-            if let image = copiedFilter.outputImage {
-                return image
-            } else {
-                throw Error.nilOutput
-            }
-        }, colorSpace: colorSpace,
-           outputDimensions: outputDimensions,
-           outputPixelFormat: outputPixelFormat,
-           outputAlphaType: outputAlphaType)
+        if let inputImage {
+            return image(byProcessing: [inputImage], using: { inputImages in
+                copiedFilter.setValue(inputImages[0], forKey: kCIInputImageKey)
+                if let image = copiedFilter.outputImage {
+                    return image
+                } else {
+                    throw Error.nilOutput
+                }
+            }, colorSpace: colorSpace,
+                         outputDimensions: outputDimensions,
+                         outputPixelFormat: outputPixelFormat,
+                         outputAlphaType: outputAlphaType)
+        } else {
+            return image(byProcessing: [], using: { inputImages in
+                if let image = copiedFilter.outputImage {
+                    return image
+                } else {
+                    throw Error.nilOutput
+                }
+            }, colorSpace: colorSpace,
+                         outputDimensions: outputDimensions,
+                         outputPixelFormat: outputPixelFormat,
+                         outputAlphaType: outputAlphaType)
+        }
     }
 }
 
