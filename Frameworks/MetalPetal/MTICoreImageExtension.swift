@@ -193,13 +193,13 @@ public final class MTICoreImageUnaryFilter: MTIUnaryFilter {
     public var outputAlphaType: MTIAlphaType = .nonPremultiplied
     
     public var outputImage: MTIImage? {
-        guard let inputImage = self.inputImage, let filter = filter?.copy() as? CIFilter else {
+        guard let filter = filter?.copy() as? CIFilter else {
             return self.inputImage
         }
         let dimensions: MTITextureDimensions
         if let outputImageSize = self.outputImageSize {
             dimensions = MTITextureDimensions(cgSize: outputImageSize)
-        } else {
+        } else if let inputImage {
             let placeholder = CIImage(color: CIColor()).cropped(to: inputImage.extent)
             filter.setValue(placeholder, forKey: kCIInputImageKey)
             if let output = filter.outputImage {
@@ -208,6 +208,8 @@ public final class MTICoreImageUnaryFilter: MTIUnaryFilter {
                 assertionFailure()
                 dimensions = inputImage.dimensions
             }
+        } else {
+            fatalError()
         }
         return MTICoreImageKernel.image(byProcessing: inputImage, using: filter, colorSpace: colorSpace, outputDimensions: dimensions, outputPixelFormat: outputPixelFormat, outputAlphaType: outputAlphaType)
     }
