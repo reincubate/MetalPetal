@@ -1,4 +1,4 @@
-// swift-tools-version:5.9
+// swift-tools-version:6.0
 
 // requires SE-0271
 
@@ -17,7 +17,8 @@ let package = Package(
     targets: [
         .target(
             name: "MetalPetal",
-            dependencies: ["MetalPetalObjectiveC"]),
+            dependencies: ["MetalPetalObjectiveC"]
+        ),
         .target(
             name: "MetalPetalObjectiveC",
             dependencies: []),

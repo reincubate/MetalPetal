@@ -50,7 +50,7 @@ public struct MTICoreImageKernel {
             return self
         }
         
-        private func ciImage(for mtiImage: MTIImage, from texture: MTLTexture) throws -> CIImage {
+        private func ciImage(for mtiImage: MTIImage, from texture: any MTLTexture) throws -> CIImage {
             let options: [CIImageOption: Any] = [.colorSpace: colorSpace ?? NSNull()]
             if let image = CIImage(mtlTexture: texture, options: options) {
                 if mtiImage.alphaType == .nonPremultiplied {
