@@ -41,7 +41,7 @@ extension MTIAlphaTypeHandlingRule {
     
 }
 
-extension MTIAlphaType: CustomStringConvertible {
+extension MTIAlphaType: @retroactive CustomStringConvertible {
     
     public var description: String {
         return MTIAlphaTypeGetDescription(self)

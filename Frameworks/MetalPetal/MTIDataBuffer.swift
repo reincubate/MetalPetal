@@ -15,7 +15,20 @@ import MetalPetalObjectiveC.Core
 extension MTIDataBuffer {
     
     public convenience init?<T>(values: [T], options: MTLResourceOptions = []) {
-        self.init(bytes: values, length: UInt(MemoryLayout<T>.size * values.count), options: options)
+        let byteCount = MemoryLayout<T>.stride * values.count
+        if byteCount == 0 {
+            var dummy: UInt8 = 0
+            self.init(bytes: &dummy, length: 0, options: options)
+            return
+        }
+        let rawPointer = UnsafeMutableRawPointer.allocate(byteCount: byteCount, alignment: MemoryLayout<T>.alignment)
+        defer {
+            rawPointer.deallocate()
+        }
+        values.withUnsafeBytes { rawBuffer in
+            rawPointer.copyMemory(from: rawBuffer.baseAddress!, byteCount: byteCount)
+        }
+        self.init(bytes: rawPointer, length: UInt(byteCount), options: options)
     }
     
     public func unsafeAccess<ReturnType, BufferContentType>(_ block: (UnsafeMutableBufferPointer<BufferContentType>) throws -> ReturnType) rethrows -> ReturnType {

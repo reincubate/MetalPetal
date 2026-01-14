@@ -21,13 +21,13 @@ extension MTIVertex {
     }
 }
 
-extension MTIVertex : Equatable {
+extension MTIVertex : @retroactive Equatable {
     public static func == (lhs: MTIVertex, rhs: MTIVertex) -> Bool {
         return lhs.isEqual(to: rhs)
     }
 }
 
-extension MTIVertex: Hashable {
+extension MTIVertex: @retroactive Hashable {
     public func hash(into hasher: inout Hasher) {
         hasher.combine(position)
         hasher.combine(textureCoordinate)

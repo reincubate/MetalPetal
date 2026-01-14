@@ -50,7 +50,9 @@ public:
             auto promise = dependency.promise;
             if (_promiseDenpendentsCountTable.count(promise) == 0) {
                 //Using array here, because a promise may have two or more identical dependents.
-                _promiseDenpendentsCountTable.insert(std::make_pair(promise, std::make_shared<UnsafeUnretainedImagePromises>(1, image.promise)));
+                auto dependents = std::make_shared<UnsafeUnretainedImagePromises>();
+                dependents->push_back(image.promise);
+                _promiseDenpendentsCountTable.insert(std::make_pair(promise, dependents));
                 this -> addDependenciesForImage(dependency);
             } else {
                 _promiseDenpendentsCountTable[promise] -> push_back(image.promise);
@@ -238,11 +240,11 @@ MTIContextImageAssociatedValueTableName const MTIContextImagePersistentResolutio
                 
                 NSUInteger dependencyCount = promise.dependencies.count;
                 
-                id<MTIImagePromiseResolution> inputResolutions[dependencyCount];
-                memset(inputResolutions, 0, sizeof inputResolutions);
+                std::vector<__unsafe_unretained id<MTIImagePromiseResolution>> inputResolutions;
+                inputResolutions.resize(dependencyCount);
                 
-                id<MTLSamplerState> inputSamplerStates[dependencyCount];
-                memset(inputSamplerStates, 0, sizeof inputSamplerStates);
+                std::vector<__unsafe_unretained id<MTLSamplerState>> inputSamplerStates;
+                inputSamplerStates.resize(dependencyCount);
                 
                 std::unordered_map<__unsafe_unretained MTIImage *, __unsafe_unretained id<MTLTexture>, MTIImageRendering::ObjcPointerHash, MTIImageRendering::ObjcPointerIdentityEqual> textureMap;
                 

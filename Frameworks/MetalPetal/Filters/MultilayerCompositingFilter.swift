@@ -13,15 +13,15 @@ import Metal
 import MetalPetalObjectiveC.Core
 #endif
 
-extension MTILayer.FlipOptions: Hashable {
+extension MTILayer.FlipOptions: @retroactive Hashable {
     
 }
 
-extension MTILayer.LayoutUnit: Hashable {
+extension MTILayer.LayoutUnit: @retroactive Hashable {
     
 }
 
-extension MTILayer.LayoutUnit: CustomDebugStringConvertible, CustomStringConvertible {
+extension MTILayer.LayoutUnit: @retroactive CustomDebugStringConvertible, @retroactive CustomStringConvertible {
     public var debugDescription: String {
         return self.name
     }

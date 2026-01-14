@@ -11,7 +11,7 @@ import Foundation
 import MetalPetalObjectiveC.Core
 #endif
 
-extension MTIColor: Hashable {
+extension MTIColor: @retroactive Hashable {
     
     public static func == (lhs: Self, rhs: Self) -> Bool {
         lhs.red == rhs.red && lhs.green == rhs.green && lhs.blue == rhs.blue && lhs.alpha == rhs.alpha

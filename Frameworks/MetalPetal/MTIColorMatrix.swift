@@ -11,7 +11,7 @@ import Foundation
 import MetalPetalObjectiveC.Core
 #endif
 
-extension MTIColorMatrix : Equatable {
+extension MTIColorMatrix : @retroactive Equatable {
     public static func == (lhs: MTIColorMatrix, rhs: MTIColorMatrix) -> Bool {
         return lhs.isEqual(to: rhs)
     }
