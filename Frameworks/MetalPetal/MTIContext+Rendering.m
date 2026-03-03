@@ -166,7 +166,8 @@ static const void * const MTICIImageMTIImageAssociationKey = &MTICIImageMTIImage
     OSType pixelFormatType = CVPixelBufferGetPixelFormatType(pixelBuffer);
     MTLPixelFormat targetPixelFormat;
     switch (pixelFormatType) {
-        case kCVPixelFormatType_32BGRA: {
+        case kCVPixelFormatType_32BGRA:
+        case kCVPixelFormatType_Lossless_32BGRA: {
             targetPixelFormat = sRGB ? MTLPixelFormatBGRA8Unorm_sRGB : MTLPixelFormatBGRA8Unorm;
         } break;
         case kCVPixelFormatType_420YpCbCr8BiPlanarVideoRange:
