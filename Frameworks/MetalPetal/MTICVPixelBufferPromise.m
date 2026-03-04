@@ -78,6 +78,7 @@ MTIContextPromiseAssociatedValueTableName const MTIContextCVPixelBufferPromiseCV
 static MTLPixelFormat MTIMTLPixelFormatForCVPixelFormatType(OSType type, BOOL sRGB) {
     switch (type) {
         case kCVPixelFormatType_32BGRA:
+        case kCVPixelFormatType_Lossless_32BGRA:
             return sRGB ? MTLPixelFormatBGRA8Unorm_sRGB : MTLPixelFormatBGRA8Unorm;
             
         case kCVPixelFormatType_420YpCbCr8BiPlanarVideoRange:
