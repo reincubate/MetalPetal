@@ -11,6 +11,6 @@ import Foundation
 import MetalPetalObjectiveC.Core
 #endif
 
-extension MTIError: Equatable {
+extension MTIError: @retroactive Equatable {
     
 }

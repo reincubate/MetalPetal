@@ -8,7 +8,7 @@
 import Foundation
 
 #if SWIFT_PACKAGE
-import MetalPetalObjectiveC.Core
+@preconcurrency import MetalPetalObjectiveC.Core
 #endif
 
 extension MTIFunctionDescriptor {

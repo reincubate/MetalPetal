@@ -6,7 +6,8 @@
 //
 
 import Foundation
-import AVFoundation
+@preconcurrency import Dispatch
+@preconcurrency import AVFoundation
 
 #if SWIFT_PACKAGE
 import MetalPetalObjectiveC.Core
@@ -37,7 +38,7 @@ public protocol MTIVideoCompositionRequest {
 }
 
 public protocol MTIMutableVideoCompositionRequest: MTIVideoCompositionRequest {
-    func finish(_ result: Result<CVPixelBuffer, Error>)
+    func finish(_ result: Result<CVPixelBuffer, any Swift.Error>)
 }
 
 public protocol MTITrackedVideoCompositionRequest: MTIVideoCompositionRequest {
@@ -51,7 +52,7 @@ extension AVAsynchronousVideoCompositionRequest: MTIMutableVideoCompositionReque
         return false
     }
     
-    public func finish(_ result: Result<CVPixelBuffer, Error>) {
+    public func finish(_ result: Result<CVPixelBuffer, any Swift.Error>) {
         switch result {
         case .failure(let error):
             self.finish(with: error)
@@ -111,7 +112,7 @@ public class MTIAsyncVideoCompositionRequestHandler {
         self.queue = queue
     }
     
-    private static func makeTransformedSourceImage(from request: MTIMutableVideoCompositionRequest, track: Track) -> MTIImage? {
+    private static func makeTransformedSourceImage(from request: any MTIMutableVideoCompositionRequest, track: Track) -> MTIImage? {
         guard let pixelBuffer = request.sourceFrame(byTrackID: track.id) else {
             return nil
         }
@@ -129,14 +130,16 @@ public class MTIAsyncVideoCompositionRequestHandler {
     
     private func enqueue(_ operation: @escaping () -> Void) {
         if let queue = self.queue {
-            queue.async(execute: operation)
+            struct UnsafeSendable<T>: @unchecked Sendable { let value: T }
+            let op = UnsafeSendable(value: operation)
+            queue.async { op.value() }
         } else {
             operation()
         }
     }
     
-    public func handle(request: MTIMutableVideoCompositionRequest) {
-        if (request as? MTITrackedVideoCompositionRequest)?.isCancelled == true { return }
+    public func handle(request: any MTIMutableVideoCompositionRequest) {
+        if (request as? (any MTITrackedVideoCompositionRequest))?.isCancelled == true { return }
         
         let sourceFrames = self.tracks.reduce(into: [CMPersistentTrackID: MTIImage]()) { (frames, track) in
             if let image = MTIAsyncVideoCompositionRequestHandler.makeTransformedSourceImage(from: request, track: track) {
@@ -150,12 +153,12 @@ public class MTIAsyncVideoCompositionRequestHandler {
         self.enqueue {
             autoreleasepool {
                 do {
-                    if (request as? MTITrackedVideoCompositionRequest)?.isCancelled == true { return }
+                    if (request as? (any MTITrackedVideoCompositionRequest))?.isCancelled == true { return }
                     
                     let mtiRequest = Request(sourceImages: sourceFrames, compositionTime: request.compositionTime, renderSize: request.renderContext.size)
                     let image = try self.filter(mtiRequest)
                     
-                    if (request as? MTITrackedVideoCompositionRequest)?.isCancelled == true { return }
+                    if (request as? (any MTITrackedVideoCompositionRequest))?.isCancelled == true { return }
                     
                     try self.context.render(image, to: pixelBuffer)
                     
@@ -175,7 +178,7 @@ public class MTIVideoComposition {
         case unsupportedInstruction
     }
     
-    private class Compositor: NSObject, AVVideoCompositing {
+    private final class Compositor: NSObject, AVVideoCompositing, @unchecked Sendable {
         
         class VideoCompositionRequest: Hashable, MTIMutableVideoCompositionRequest, MTITrackedVideoCompositionRequest {
             
@@ -210,7 +213,7 @@ public class MTIVideoComposition {
             
             var isTrackTransformApplied: Bool { return false }
             
-            func finish(_ result: Result<CVPixelBuffer, Swift.Error>) {
+            func finish(_ result: Result<CVPixelBuffer, any Swift.Error>) {
                 stateLock.lock()
                 if !_isCancelled {
                     internalRequest.finish(result)
@@ -242,7 +245,7 @@ public class MTIVideoComposition {
             }
         }
         
-        class Instruction: NSObject, AVVideoCompositionInstructionProtocol {
+        class Instruction: NSObject, AVVideoCompositionInstructionProtocol, @unchecked Sendable {
             
             typealias Handler = (_ request: VideoCompositionRequest) -> Void
             
@@ -264,9 +267,13 @@ public class MTIVideoComposition {
             }
         }
         
-        let sourcePixelBufferAttributes: [String : Any]? = [kCVPixelBufferPixelFormatTypeKey as String: [kCVPixelFormatType_420YpCbCr8BiPlanarFullRange, kCVPixelFormatType_32BGRA, kCVPixelFormatType_420YpCbCr8BiPlanarVideoRange]]
+        var sourcePixelBufferAttributes: [String: any Sendable]? {
+            [kCVPixelBufferPixelFormatTypeKey as String: [kCVPixelFormatType_420YpCbCr8BiPlanarFullRange, kCVPixelFormatType_32BGRA, kCVPixelFormatType_420YpCbCr8BiPlanarVideoRange] as [OSType]]
+        }
         
-        let requiredPixelBufferAttributesForRenderContext: [String : Any] = [kCVPixelBufferPixelFormatTypeKey as String: kCVPixelFormatType_32BGRA]
+        var requiredPixelBufferAttributesForRenderContext: [String: any Sendable] {
+            [kCVPixelBufferPixelFormatTypeKey as String: kCVPixelFormatType_32BGRA as OSType]
+        }
         
         private var pendingRequests: Set<VideoCompositionRequest> = []
         private let pendingRequestsLock = MTILockCreate()

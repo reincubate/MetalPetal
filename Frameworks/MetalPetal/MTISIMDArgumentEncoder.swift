@@ -21,7 +21,7 @@ import MetalPetalObjectiveC.Core
         }
     }
     
-    public static func encodeValue(_ value: Any, argument: MTLArgument, proxy: MTIFunctionArgumentEncodingProxy) throws {
+    public static func encodeValue(_ value: Any, argument: MTLArgument, proxy: any MTIFunctionArgumentEncodingProxy) throws {
         switch value {
         case let v as SIMD2<Float>:
             guard argument.bufferDataType == .float2 else {
@@ -185,7 +185,7 @@ import MetalPetalObjectiveC.Core
         }
     }
 
-    private static func encode<T>(_ value: T, proxy: MTIFunctionArgumentEncodingProxy) {
+    private static func encode<T>(_ value: T, proxy: any MTIFunctionArgumentEncodingProxy) {
         withUnsafePointer(to: value) { ptr in
             proxy.encodeBytes(ptr, length: UInt(MemoryLayout.size(ofValue: value)))
         }

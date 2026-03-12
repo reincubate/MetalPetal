@@ -11,7 +11,7 @@ import Foundation
 import MetalPetalObjectiveC.Core
 #endif
 
-extension MTICornerRadius: Equatable {
+extension MTICornerRadius: @retroactive Equatable {
     public static func == (lhs: MTICornerRadius, rhs: MTICornerRadius) -> Bool {
         return lhs.topLeft == rhs.topLeft &&
             lhs.topRight == rhs.topRight &&
@@ -20,7 +20,7 @@ extension MTICornerRadius: Equatable {
     }
 }
 
-extension MTICornerRadius: Hashable {
+extension MTICornerRadius: @retroactive Hashable {
     public func hash(into hasher: inout Hasher) {
         hasher.combine(topLeft)
         hasher.combine(topRight)

@@ -1,4 +1,4 @@
-// swift-tools-version:5.9
+// swift-tools-version:6.0
 
 // requires SE-0271
 
@@ -6,7 +6,7 @@ import PackageDescription
 
 let package = Package(
     name: "MetalPetal",
-    platforms: [.macOS(.v10_13), .iOS(.v11), .tvOS(.v13), .visionOS(.v1)],
+    platforms: [.macOS(.v10_13), .iOS(.v12), .tvOS(.v13), .visionOS(.v1)],
     products: [
         .library(
             name: "MetalPetal",
@@ -17,7 +17,8 @@ let package = Package(
     targets: [
         .target(
             name: "MetalPetal",
-            dependencies: ["MetalPetalObjectiveC"]),
+            dependencies: ["MetalPetalObjectiveC"]
+        ),
         .target(
             name: "MetalPetalObjectiveC",
             dependencies: []),

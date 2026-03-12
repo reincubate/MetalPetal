@@ -11,6 +11,7 @@ import Metal
 import MetalPetalObjectiveC.Core
 #endif
 
+@MainActor
 public protocol MTIImageViewProtocol: AnyObject {
     
     var automaticallyCreatesContext: Bool { get set }
@@ -34,19 +35,13 @@ extension MTIImageViewProtocol {
 
 #if canImport(UIKit) && os(iOS)
 
+@MainActor
 extension MTIImageView: MTIImageViewProtocol {
     
 }
 
+@MainActor
 extension MTIThreadSafeImageView: MTIImageViewProtocol {
-    
-}
-
-extension MTIImageView: InputPortProvider {
-    
-}
-
-extension MTIThreadSafeImageView: InputPortProvider {
     
 }
 

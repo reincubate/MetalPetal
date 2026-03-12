@@ -9,9 +9,9 @@ import Foundation
 import CoreImage
 
 #if SWIFT_PACKAGE
-@_implementationOnly import MetalPetalObjectiveC.Extension
+import MetalPetalObjectiveC.Extension
 #else
-@_implementationOnly import MetalPetal.Extension
+import MetalPetal.Extension
 #endif
 
 /// `MTICoreImageKernel` provides the ability to use CoreImage filters with MetalPetal with little or no overhead.
@@ -50,7 +50,7 @@ public struct MTICoreImageKernel {
             return self
         }
         
-        private func ciImage(for mtiImage: MTIImage, from texture: MTLTexture) throws -> CIImage {
+        private func ciImage(for mtiImage: MTIImage, from texture: any MTLTexture) throws -> CIImage {
             let options: [CIImageOption: Any] = [.colorSpace: colorSpace ?? NSNull()]
             if let image = CIImage(mtlTexture: texture, options: options) {
                 if mtiImage.alphaType == .nonPremultiplied {

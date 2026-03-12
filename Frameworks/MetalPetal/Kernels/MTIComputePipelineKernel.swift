@@ -13,7 +13,7 @@ import MetalPetalObjectiveC.Core
 #endif
 
 extension MTIComputeFunctionDispatchOptions {
-    public convenience init(_ generator: @escaping (_ pipelineState: MTLComputePipelineState) -> (threads: MTLSize, threadgroups: MTLSize, threadsPerThreadgroup: MTLSize)) {
+    public convenience init(_ generator: @escaping (_ pipelineState: any MTLComputePipelineState) -> (threads: MTLSize, threadgroups: MTLSize, threadsPerThreadgroup: MTLSize)) {
         self.init(__generator: { pipelineState, threadsPtr, threadgroupsPtr, threadsPerThreadgroupPtr in
             let results = generator(pipelineState)
             threadsPtr.pointee = results.threads

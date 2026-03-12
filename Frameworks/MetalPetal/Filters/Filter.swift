@@ -8,7 +8,7 @@
 import Foundation
 
 #if SWIFT_PACKAGE
-import MetalPetalObjectiveC.Core
+@preconcurrency import MetalPetalObjectiveC.Core
 #endif
 
 /// Port for read `Value` from `Object`
@@ -76,11 +76,11 @@ private protocol PortConnection {
 }
 
 private struct PortConnectionsBuildingContext {
-    static var contexts: [PortConnectionsBuildingContext] = []
+    nonisolated(unsafe) static var contexts: [PortConnectionsBuildingContext] = []
     
-    private var connections: [PortConnection] = []
+    private var connections: [any PortConnection] = []
 
-    static func add(connection: PortConnection) {
+    static func add(connection: any PortConnection) {
         precondition(contexts.count > 0, "No available PortConnectionsBuildingContext. You can only use `=>` operator in FilterGraph.makeImage or FilterGraph.connect function.")
         contexts[contexts.count - 1].connections.append(connection)
     }
@@ -89,7 +89,7 @@ private struct PortConnectionsBuildingContext {
         contexts.append(PortConnectionsBuildingContext())
     }
     
-    static func pop() -> [PortConnection] {
+    static func pop() -> [any PortConnection] {
         guard let current = contexts.popLast() else {
             fatalError()
         }
@@ -102,11 +102,11 @@ public class FilterGraph {
     fileprivate struct Connection<FromPort, ToPort>: PortConnection where FromPort: OutputPort, ToPort: InputPort, FromPort.Value == MTIImage?, ToPort.Value == MTIImage? {
         
         var fromObject: AnyObject {
-            return (self.from as? ProxyPort)?.target.object ?? self.from.object
+            return (self.from as? (any ProxyPort))?.target.object ?? self.from.object
         }
         
         var toObject: AnyObject {
-            return (self.to as? ProxyPort)?.target.object ?? self.to.object
+            return (self.to as? (any ProxyPort))?.target.object ?? self.to.object
         }
         
         let from: FromPort
@@ -120,7 +120,7 @@ public class FilterGraph {
         func connect(context: PortConnectionContext) {
             let fromObjectIdentifier = ObjectIdentifier(self.fromObject)
             let toObjectIdentifier = ObjectIdentifier(self.toObject)
-            let fromKeyPath = (self.from as? ProxyPort)?.target.keyPath ?? self.from.keyPath
+            let fromKeyPath = (self.from as? (any ProxyPort))?.target.keyPath ?? self.from.keyPath
             if let c = context.portValueCache[fromObjectIdentifier], let v = c[fromKeyPath]  {
                 to.object[keyPath: to.writableKeyPath] = v
             } else {
