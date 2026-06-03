@@ -14,6 +14,7 @@
 #import "MTIImagePromiseDebug.h"
 
 #import <MetalFX/MetalFX.h>
+#import <MetalPerformanceShaders/MetalPerformanceShaders.h>
 
 static NSString * const MTIFXSpatialScalerErrorDomain = @"com.metalpetal.MTIFXSpatialScalerKernel";
 
@@ -31,6 +32,8 @@ API_AVAILABLE(macos(13.0), ios(16.0), tvos(16.0), visionos(1.0))
                                       outputHeight:(NSUInteger)outputHeight
                                        pixelFormat:(MTLPixelFormat)pixelFormat
                                              error:(NSError * __autoreleasing *)error;
+
++ (BOOL)isMetalFXSupportedColorFormat:(MTLPixelFormat)format;
 
 @end
 
@@ -69,28 +72,20 @@ __attribute__((objc_subclassing_restricted))
 - (MTIImagePromiseRenderTarget *)resolveWithContext:(MTIImageRenderingContext *)renderingContext error:(NSError * __autoreleasing *)inOutError {
     id<MTLTexture> inputTexture = [renderingContext resolvedTextureForImage:self.inputImages[0]];
     MTLPixelFormat pixelFormat = inputTexture.pixelFormat;
+    NSUInteger inputWidth = inputTexture.width;
+    NSUInteger inputHeight = inputTexture.height;
+    NSUInteger outputWidth = self.dimensions.width;
+    NSUInteger outputHeight = self.dimensions.height;
 
     NSError *error = nil;
-    id<MTLFXSpatialScaler> scaler = [self.kernel scalerForDevice:renderingContext.context.device
-                                                      inputWidth:inputTexture.width
-                                                     inputHeight:inputTexture.height
-                                                     outputWidth:self.dimensions.width
-                                                    outputHeight:self.dimensions.height
-                                                     pixelFormat:pixelFormat
-                                                           error:&error];
-    if (!scaler) {
-        if (inOutError) { *inOutError = error; }
-        return nil;
-    }
 
-    // Allocate the upscaled output. MetalFX requires the destination to satisfy
-    // `outputTextureUsage`; downstream MetalPetal stages additionally sample it, so we add
-    // shaderRead.
+    // Allocate the output. The usage is a superset that satisfies MetalFX (render target), the
+    // MPS Lanczos fallback (shader write) and downstream MetalPetal sampling (shader read).
     MTITextureDescriptor *outputDescriptor = [MTITextureDescriptor texture2DDescriptorWithPixelFormat:pixelFormat
-                                                                                                width:self.dimensions.width
-                                                                                               height:self.dimensions.height
+                                                                                                width:outputWidth
+                                                                                               height:outputHeight
                                                                                             mipmapped:NO
-                                                                                                usage:(scaler.outputTextureUsage | MTLTextureUsageShaderRead)
+                                                                                                usage:(MTLTextureUsageRenderTarget | MTLTextureUsageShaderRead | MTLTextureUsageShaderWrite)
                                                                                       resourceOptions:MTLResourceStorageModePrivate];
     MTIImagePromiseRenderTarget *renderTarget = [renderingContext.context newRenderTargetWithReusableTextureDescriptor:outputDescriptor error:&error];
     if (error) {
@@ -98,42 +93,68 @@ __attribute__((objc_subclassing_restricted))
         return nil;
     }
 
-    // MetalFX requires the input color texture to satisfy `colorTextureUsage`. MetalPetal's
-    // resolved textures are sampled downstream so they normally include shaderRead; if a
-    // particular input does not, blit it into a conforming texture first.
-    id<MTLTexture> colorTexture = inputTexture;
-    if ((inputTexture.usage & scaler.colorTextureUsage) != scaler.colorTextureUsage) {
-        MTLTextureDescriptor *conformingDescriptor = [MTLTextureDescriptor texture2DDescriptorWithPixelFormat:pixelFormat
-                                                                                                        width:inputTexture.width
-                                                                                                       height:inputTexture.height
-                                                                                                    mipmapped:NO];
-        conformingDescriptor.usage = inputTexture.usage | scaler.colorTextureUsage;
-        conformingDescriptor.storageMode = MTLStorageModePrivate;
-        id<MTLTexture> conformingTexture = [renderingContext.context.device newTextureWithDescriptor:conformingDescriptor];
-        id<MTLBlitCommandEncoder> blit = [renderingContext.commandBuffer blitCommandEncoder];
-        [blit copyFromTexture:inputTexture
-                  sourceSlice:0
-                  sourceLevel:0
-                 sourceOrigin:MTLOriginMake(0, 0, 0)
-                   sourceSize:MTLSizeMake(inputTexture.width, inputTexture.height, 1)
-                    toTexture:conformingTexture
-             destinationSlice:0
-             destinationLevel:0
-            destinationOrigin:MTLOriginMake(0, 0, 0)];
-        [blit endEncoding];
-        colorTexture = conformingTexture;
+    // MetalFX only supports a strict upscale with specific colour formats. An invalid
+    // configuration triggers an *uncatchable* internal assertion ("Internal shaders or textures
+    // creation error"), so validate up front. In particular the resolved input texture can be
+    // larger than the logical extent the caller sized the output from, which would make the
+    // output smaller than the input — MetalFX cannot downscale. Fall back to Lanczos for anything
+    // it can't handle.
+    BOOL canUseMetalFX = inputWidth > 0 && inputHeight > 0 &&
+                         outputWidth > inputWidth && outputHeight > inputHeight &&
+                         [MTIFXSpatialScalerKernel isMetalFXSupportedColorFormat:pixelFormat];
+
+    if (canUseMetalFX) {
+        id<MTLFXSpatialScaler> scaler = [self.kernel scalerForDevice:renderingContext.context.device
+                                                          inputWidth:inputWidth
+                                                         inputHeight:inputHeight
+                                                         outputWidth:outputWidth
+                                                        outputHeight:outputHeight
+                                                         pixelFormat:pixelFormat
+                                                               error:&error];
+        if (scaler) {
+            // MetalFX requires the input colour texture to satisfy `colorTextureUsage`. MetalPetal's
+            // resolved textures are sampled downstream so they normally include shaderRead; if a
+            // particular input does not, blit it into a conforming texture first.
+            id<MTLTexture> colorTexture = inputTexture;
+            if ((inputTexture.usage & scaler.colorTextureUsage) != scaler.colorTextureUsage) {
+                MTLTextureDescriptor *conformingDescriptor = [MTLTextureDescriptor texture2DDescriptorWithPixelFormat:pixelFormat
+                                                                                                                width:inputWidth
+                                                                                                               height:inputHeight
+                                                                                                            mipmapped:NO];
+                conformingDescriptor.usage = inputTexture.usage | scaler.colorTextureUsage;
+                conformingDescriptor.storageMode = MTLStorageModePrivate;
+                id<MTLTexture> conformingTexture = [renderingContext.context.device newTextureWithDescriptor:conformingDescriptor];
+                id<MTLBlitCommandEncoder> blit = [renderingContext.commandBuffer blitCommandEncoder];
+                [blit copyFromTexture:inputTexture
+                          sourceSlice:0
+                          sourceLevel:0
+                         sourceOrigin:MTLOriginMake(0, 0, 0)
+                           sourceSize:MTLSizeMake(inputWidth, inputHeight, 1)
+                            toTexture:conformingTexture
+                     destinationSlice:0
+                     destinationLevel:0
+                    destinationOrigin:MTLOriginMake(0, 0, 0)];
+                [blit endEncoding];
+                colorTexture = conformingTexture;
+            }
+
+            // A cached scaler may be shared by concurrent contexts. Its texture properties are
+            // per-encode state, so serialise configuring + encoding it.
+            @synchronized (scaler) {
+                scaler.colorTexture = colorTexture;
+                scaler.outputTexture = renderTarget.texture;
+                scaler.inputContentWidth = inputWidth;
+                scaler.inputContentHeight = inputHeight;
+                [scaler encodeToCommandBuffer:renderingContext.commandBuffer];
+            }
+            return renderTarget;
+        }
     }
 
-    // A scaler is cached and may be shared by concurrent contexts at the same resolution. Its
-    // texture properties are per-encode state, so serialise configuring + encoding it.
-    @synchronized (scaler) {
-        scaler.colorTexture = colorTexture;
-        scaler.outputTexture = renderTarget.texture;
-        scaler.inputContentWidth = inputTexture.width;
-        scaler.inputContentHeight = inputTexture.height;
-        [scaler encodeToCommandBuffer:renderingContext.commandBuffer];
-    }
-
+    // Fallback: Lanczos scale (MPS) straight to the requested output size. Matches ResizeFilter's
+    // behaviour and never trips MetalFX's assertion.
+    MPSImageLanczosScale *lanczos = [[MPSImageLanczosScale alloc] initWithDevice:renderingContext.context.device];
+    [lanczos encodeToCommandBuffer:renderingContext.commandBuffer sourceTexture:inputTexture destinationTexture:renderTarget.texture];
     return renderTarget;
 }
 
@@ -172,6 +193,20 @@ __attribute__((objc_subclassing_restricted))
     return [MTLFXSpatialScalerDescriptor supportsDevice:device];
 }
 
++ (BOOL)isMetalFXSupportedColorFormat:(MTLPixelFormat)format {
+    switch (format) {
+        case MTLPixelFormatRGBA8Unorm:
+        case MTLPixelFormatRGBA8Unorm_sRGB:
+        case MTLPixelFormatBGRA8Unorm:
+        case MTLPixelFormatBGRA8Unorm_sRGB:
+        case MTLPixelFormatRGBA16Float:
+        case MTLPixelFormatRGB10A2Unorm:
+            return YES;
+        default:
+            return NO;
+    }
+}
+
 - (nullable id<MTLFXSpatialScaler>)scalerForDevice:(id<MTLDevice>)device
                                         inputWidth:(NSUInteger)inputWidth
                                        inputHeight:(NSUInteger)inputHeight
@@ -199,6 +234,12 @@ __attribute__((objc_subclassing_restricted))
         descriptor.outputTextureFormat = pixelFormat;
         // Camera frames are gamma-encoded (non-linear) in MetalPetal's working space.
         descriptor.colorProcessingMode = MTLFXSpatialScalerColorProcessingModePerceptual;
+
+        // Logged once per unique configuration (cache miss) so a problematic config is visible in
+        // Console even if MetalFX aborts inside the call below.
+        NSLog(@"[MetalFX] creating spatial scaler input=%lux%lu output=%lux%lu format=%lu",
+              (unsigned long)inputWidth, (unsigned long)inputHeight,
+              (unsigned long)outputWidth, (unsigned long)outputHeight, (unsigned long)pixelFormat);
 
         id<MTLFXSpatialScaler> scaler = [descriptor newSpatialScalerWithDevice:device];
         if (!scaler) {
