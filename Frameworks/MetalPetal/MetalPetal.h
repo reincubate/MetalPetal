@@ -32,6 +32,7 @@
 #import "MTIUnaryImageRenderingFilter.h"
 #import "MTIVibranceFilter.h"
 #import "MTIComputePipelineKernel.h"
+#import "MTIFXSpatialScalerKernel.h"
 #import "MTIKernel.h"
 #import "MTIMPSKernel.h"
 #import "MTIMultilayerCompositeKernel.h"

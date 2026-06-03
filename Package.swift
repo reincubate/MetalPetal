@@ -20,7 +20,13 @@ let package = Package(
             dependencies: ["MetalPetalObjectiveC"]),
         .target(
             name: "MetalPetalObjectiveC",
-            dependencies: []),
+            dependencies: [],
+            // MetalFX (used by MTIFXSpatialScalerKernel) is only available on macOS 13 /
+            // iOS 16+. Weak-link it so binaries still launch on older OS versions, where the
+            // kernel is gated behind +isSupportedByDevice: / @available and never invoked.
+            linkerSettings: [
+                .unsafeFlags(["-Xlinker", "-weak_framework", "-Xlinker", "MetalFX"])
+            ]),
     ],
     cxxLanguageStandard: .cxx14
 )
