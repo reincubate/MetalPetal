@@ -79,6 +79,20 @@ __attribute__((objc_subclassing_restricted))
 
     NSError *error = nil;
 
+    // Backstop against degenerate sizes — both MetalFX and MetalPetal's heap texture pool assert
+    // on zero-sized textures. (Callers should already guard this.)
+    if (inputWidth == 0 || inputHeight == 0 || outputWidth == 0 || outputHeight == 0) {
+        NSLog(@"[MetalFX] skipping degenerate size input=%lux%lu output=%lux%lu",
+              (unsigned long)inputWidth, (unsigned long)inputHeight,
+              (unsigned long)outputWidth, (unsigned long)outputHeight);
+        if (inOutError) {
+            *inOutError = [NSError errorWithDomain:MTIFXSpatialScalerErrorDomain
+                                              code:2
+                                          userInfo:@{NSLocalizedDescriptionKey: @"Degenerate texture size for spatial scaler."}];
+        }
+        return nil;
+    }
+
     // Allocate the output. The usage is a superset that satisfies MetalFX (render target), the
     // MPS Lanczos fallback (shader write) and downstream MetalPetal sampling (shader read).
     MTITextureDescriptor *outputDescriptor = [MTITextureDescriptor texture2DDescriptorWithPixelFormat:pixelFormat
