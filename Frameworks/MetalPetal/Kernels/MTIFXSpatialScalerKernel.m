@@ -79,12 +79,9 @@ __attribute__((objc_subclassing_restricted))
 
     NSError *error = nil;
 
-    // Backstop against degenerate sizes — both MetalFX and MetalPetal's heap texture pool assert
-    // on zero-sized textures. (Callers should already guard this.)
+    // Backstop against degenerate sizes — MetalFX and MetalPetal's heap texture pool assert on
+    // zero-sized textures. (Callers should already guard this.)
     if (inputWidth == 0 || inputHeight == 0 || outputWidth == 0 || outputHeight == 0) {
-        NSLog(@"[MetalFX] skipping degenerate size input=%lux%lu output=%lux%lu",
-              (unsigned long)inputWidth, (unsigned long)inputHeight,
-              (unsigned long)outputWidth, (unsigned long)outputHeight);
         if (inOutError) {
             *inOutError = [NSError errorWithDomain:MTIFXSpatialScalerErrorDomain
                                               code:2
@@ -93,28 +90,12 @@ __attribute__((objc_subclassing_restricted))
         return nil;
     }
 
-    // Allocate the output. The usage is a superset that satisfies MetalFX (render target), the
-    // MPS Lanczos fallback (shader write) and downstream MetalPetal sampling (shader read).
-    MTITextureDescriptor *outputDescriptor = [MTITextureDescriptor texture2DDescriptorWithPixelFormat:pixelFormat
-                                                                                                width:outputWidth
-                                                                                               height:outputHeight
-                                                                                            mipmapped:NO
-                                                                                                usage:(MTLTextureUsageRenderTarget | MTLTextureUsageShaderRead | MTLTextureUsageShaderWrite)
-                                                                                      resourceOptions:MTLResourceStorageModePrivate];
-    MTIImagePromiseRenderTarget *renderTarget = [renderingContext.context newRenderTargetWithReusableTextureDescriptor:outputDescriptor error:&error];
-    if (error) {
-        if (inOutError) { *inOutError = error; }
-        return nil;
-    }
-
-    // MetalFX only supports a strict upscale with specific colour formats. An invalid
-    // configuration triggers an *uncatchable* internal assertion ("Internal shaders or textures
-    // creation error"), so validate up front. In particular the resolved input texture can be
-    // larger than the logical extent the caller sized the output from, which would make the
-    // output smaller than the input — MetalFX cannot downscale. Fall back to Lanczos for anything
-    // it can't handle.
-    BOOL canUseMetalFX = inputWidth > 0 && inputHeight > 0 &&
-                         outputWidth > inputWidth && outputHeight > inputHeight &&
+    // MetalFX only supports a strict upscale with specific colour formats; an invalid configuration
+    // triggers an *uncatchable* internal assertion, so validate up front and fall back to Lanczos
+    // (MPS) otherwise. The resolved input texture can also be larger than the logical extent the
+    // caller sized the output from, making the output smaller than the input — MetalFX can't
+    // downscale.
+    BOOL canUseMetalFX = outputWidth > inputWidth && outputHeight > inputHeight &&
                          [MTIFXSpatialScalerKernel isMetalFXSupportedColorFormat:pixelFormat];
 
     if (canUseMetalFX) {
@@ -126,6 +107,18 @@ __attribute__((objc_subclassing_restricted))
                                                          pixelFormat:pixelFormat
                                                                error:&error];
         if (scaler) {
+            // Output in the input's format with exactly the usage MetalFX needs (+ shaderRead for
+            // downstream sampling). Deliberately *no* shaderWrite — some pixel formats don't
+            // support it and the heap texture allocation would then compute a zero size and assert.
+            MTITextureDescriptor *outputDescriptor = [MTITextureDescriptor texture2DDescriptorWithPixelFormat:pixelFormat
+                                                                                                        width:outputWidth
+                                                                                                       height:outputHeight
+                                                                                                    mipmapped:NO
+                                                                                                        usage:(scaler.outputTextureUsage | MTLTextureUsageShaderRead)
+                                                                                              resourceOptions:MTLResourceStorageModePrivate];
+            MTIImagePromiseRenderTarget *renderTarget = [renderingContext.context newRenderTargetWithReusableTextureDescriptor:outputDescriptor error:&error];
+            if (error) { if (inOutError) { *inOutError = error; } return nil; }
+
             // MetalFX requires the input colour texture to satisfy `colorTextureUsage`. MetalPetal's
             // resolved textures are sampled downstream so they normally include shaderRead; if a
             // particular input does not, blit it into a conforming texture first.
@@ -165,8 +158,18 @@ __attribute__((objc_subclassing_restricted))
         }
     }
 
-    // Fallback: Lanczos scale (MPS) straight to the requested output size. Matches ResizeFilter's
-    // behaviour and never trips MetalFX's assertion.
+    // Fallback: Lanczos scale (MPS) to the requested size, into MetalPetal's working pixel format
+    // (which reliably supports the shaderWrite MPS needs). Matches ResizeFilter's behaviour.
+    MTLPixelFormat fallbackFormat = renderingContext.context.workingPixelFormat;
+    MTITextureDescriptor *fallbackDescriptor = [MTITextureDescriptor texture2DDescriptorWithPixelFormat:fallbackFormat
+                                                                                                  width:outputWidth
+                                                                                                 height:outputHeight
+                                                                                              mipmapped:NO
+                                                                                                  usage:(MTLTextureUsageShaderWrite | MTLTextureUsageShaderRead)
+                                                                                        resourceOptions:MTLResourceStorageModePrivate];
+    MTIImagePromiseRenderTarget *renderTarget = [renderingContext.context newRenderTargetWithReusableTextureDescriptor:fallbackDescriptor error:&error];
+    if (error) { if (inOutError) { *inOutError = error; } return nil; }
+
     MPSImageLanczosScale *lanczos = [[MPSImageLanczosScale alloc] initWithDevice:renderingContext.context.device];
     [lanczos encodeToCommandBuffer:renderingContext.commandBuffer sourceTexture:inputTexture destinationTexture:renderTarget.texture];
     return renderTarget;
